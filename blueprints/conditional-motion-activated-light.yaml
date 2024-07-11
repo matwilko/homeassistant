@@ -1,0 +1,76 @@
+blueprint:
+  name: Conditional Motion-activated Light
+  description: Turn on a light when motion is detected, and any other arbitrary condition is satisfied.
+  domain: automation
+  author: Matt Wilkinson
+  input:
+    motion_entity:
+      name: Motion Sensor
+      selector:
+        entity:
+          filter:
+            device_class: motion
+            domain: binary_sensor
+    light_target:
+      name: Light
+      selector:
+        target:
+          entity:
+            domain: light
+
+    onCondition:
+      name: Condition for turning on
+      description: Any extra conditions for turning the light on
+      default: []
+      selector:
+        condition:
+    
+    offCondition:
+      name: Condition for turning off
+      description: Any extra conditinos for turning the light off (if met, the automation will delay for the wait time again)
+      default: []
+      selector:
+        condition:
+
+    no_motion_wait:
+      name: Wait time
+      description: Time to leave the light on after last motion is detected (and the other off-conditions are met)
+      default:
+        minutes: 2
+      selector:
+        duration:
+          enable_day: false
+
+# If motion is detected within the delay,
+# we restart the script.
+mode: restart
+max_exceeded: silent
+
+trigger:
+  platform: state
+  entity_id: !input motion_entity
+  from: "off"
+  to: "on"
+
+action:
+  - condition: !input onCondition
+  - alias: "Turn on the light"
+    service: light.turn_on
+    target: !input light_target
+  - alias: "Wait until there is no motion from device"
+    wait_for_trigger:
+      platform: state
+      entity_id: !input motion_entity
+      from: "on"
+      to: "off"
+  - alias: "Wait the number of seconds that has been set"
+    delay: !input no_motion_wait
+  - alias: "Wait for the off condition"
+    repeat:
+      sequence:
+        - alias: "Wait the number of seconds that has been set"
+          delay: !input no_motion_wait
+      until: !input offCondition
+  - alias: "Turn off the light"
+    service: light.turn_off
+    target: !input light_target
